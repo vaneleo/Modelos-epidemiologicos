@@ -53,6 +53,8 @@ legend("topright", legend=c("S","E","R_I","R"),col=c("turquoise1","limegreen","c
 matplot(ej_l[,1],ej_l[,6:7],main="Virus en el modelo determinístico para Lisis",xlab="Tiempo (días)",ylab="Individuos",t="l",lty=c(1,1),col=c("mediumblue","khaki4"),lwd=2)
 legend("right", legend=c("S_v","R_v"),col=c("mediumblue","khaki4"), lty=c(1,1),cex=0.5)
 
+matplot(ej_l[,1],ej_l[,c(2,6)],main="Fase Aguda: modelo determinístico para Lisis",xlab="Tiempo (días)",ylab="Individuos",t="l",lty=c(1,1),col=c("turquoise1","mediumblue"),lwd=2)
+legend("right", legend=c("S","S_v"),col=c("turquoise1","mediumblue"), lty=c(1,1),cex=0.5)
 
 ej_b<-X_theta_brote(theta=c(alp=0.3,lam=0.002,del=0.24,gam=14.75,mu_c=0.1475,mu_v=3,s_m=1500),t=seq(0,12,by=0.01),X_ini=c(s=3000,e=0,i=0,r=0,s_v=100,r_v=0))#s_v=10
 
