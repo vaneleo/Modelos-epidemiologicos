@@ -702,7 +702,7 @@ for(i in 0:tm){
   dev.off()
 }
 
-# Funciones que nos dan las gráficas de la evolución de las poblaciones células (Lisis y Brote) a lo largo de todo el proceso, y de virus.
+# Funciones que nos dan las gráficas de la evolución de las poblaciones (Lisis y Brote) a lo largo de todo el proceso.
 
 # ENTRADA: Matriz de Históricos (de células o virus), tiempo empírico t_emp>t_m pero menor que el de la última reacción, el paso que daremos en el tiempo al graficar.
 # SALIDA: Gráfica.
@@ -748,10 +748,23 @@ Graf_V<-function(Hist_V,t_emp,paso){
   legend("topleft", legend = c("S_v","R_v"), col = c("mediumblue","khaki4"), lty = c(1,1), cex = 0.5)
 }
 
+Graf_Fase_Aguda<-function(Hist_Cel,Hist_V,t_emp,paso){
+  tiempo<-seq(0,12,by=paso)
+  p_b<-c(Pob_Cel(Hist_Cel,tiempo[1],1,t_emp)$long_r,Pob_V(Hist_V,tiempo[1],1,t_emp)$long_r)   
+  for(i in 2:length(tiempo)){
+    p_b<-rbind(p_b,c(Pob_Cel(Hist_Cel,tiempo[i],1,t_emp)$long_r,Pob_V(Hist_V,tiempo[i],1,t_emp)$long_r))
+    print(tiempo[i])
+  }
+  plot(tiempo,p_b[,1],main="Fase Aguda: Gillespie en Lisis", type = "l", frame = FALSE,col = "turquoise1", xlab = "Tiempo (días)", ylab = "Individuos", ylim=c(0,25000), lty = 1, lwd = 2)
+  lines(tiempo,p_b[,2] , col = "mediumblue", type = "l", lty = 1, lwd = 2)
+  legend("right", legend = c("S","S_v"), col = c("turquoise1","mediumblue"), lty = c(1,1), cex = 0.5)
+}
+
 Graf_Cel_L(M_Cel_l,12.0001,0.2)
 Graf_V(M_V_l,12.0001,0.2) 
 Graf_Cel_B(M_Cel_b,12.000004,0.1)
 Graf_V(M_V_b,12.000004,0.1)
+Graf_Fase_Aguda(M_Cel_l,M_V_l,12.0001,0.1)
 
 ls()
 remove(list = ls())
