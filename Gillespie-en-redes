@@ -1,0 +1,311 @@
+# Sea G descrita por una matriz de mX2 donde cada renglón señala el arco existente en la red.
+# Consideramos una red no dirigida, así que la existencia del arco (v1,v2) es equivalente a (v2,v1).
+rm(list=ls())
+
+tableinv <- function(tab){
+  y <- rep(as.numeric(names(tab)),tab)
+  return(y)
+}
+
+ordenar<-function(G){
+  # Esta función remueve los arcos a sí misma. Además en la primera columna aparece el vertice menor, y 
+  # estan ordenados en forma ascendente, con respecto a la primera y luego la segunda columna.
+  # G es una matriz de tamaño mx2.
+  Gord<-G
+  b<-which(G[,2]<G[,1])
+  Gord[b,1]<-G[b,2]
+  Gord[b,2]<-G[b,1]
+  Gord<-Gord[order(Gord[,1],Gord[,2]),]
+  b<-which(Gord[,1]==Gord[,2])
+  if(length(b)>0) Gord<-Gord[-b,]
+  list(Gord=Gord)
+}
+
+vecinos<-function(G,vertices){
+  # Identifica los vecinos a los vertices indexados segun "vertices".
+  a<-matrix(G%in%vertices,ncol=2)
+  expuestos<-rowSums(a)
+  if(any(expuestos==2)) G<-G[expuestos!=2,] # Remuevo ya que ambos están infectados.
+  a<-matrix(G%in%vertices,ncol=2)
+  w<-which(a,arr=TRUE)
+  wv<-w
+  wv[w[,2]==1,2]<-2
+  wv[w[,2]==2,2]<-1
+  # browser()
+  EenRiesgo<-G[w[,1],]
+  if(length(EenRiesgo)>0){
+    if(!is.matrix(EenRiesgo) && length(EenRiesgo)==2)
+      EenRiesgo<-t(EenRiesgo)
+  }else{
+    EenRiesgo<-NULL
+  }
+  list(EenRiesgo=EenRiesgo, suc=wv[,2],inf=w[,2])
+}
+
+Gillespie_SIR_Red<-function(G,n,tau, gamma,infected0,time_max){
+  # G es un grafo descrito por sus arcos. Éstos se consideran con vértices enumerados del 1 al n.
+  # n es el orden del grafo.
+  mm<-time_max*(tau*gamma*n)
+  time_hist<-S_hist<-I_hist<-R_hist<-rep(NA,mm)
+  time_hist[1]<-0
+  S_hist[1]<-S<-n-length(infected0)
+  I_hist[1]<-I<-length(infected0)
+  R_hist[1]<-R<-0
+  infected<-infected0
+  at_risk<-vecinos(G,infected)
+  if(!is.null(at_risk$EenRiesgo)){
+    table_at_risk<-table(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)])
+    at_risk_nodes<-as.numeric(names(table_at_risk)) # Aparecen una sola vez en este vector.
+    infection_rate<-tau*as.vector(table_at_risk) # Tiene la longitud del número de personas diferentes que son suceptibles conectadas a infecciosos.
+  }else{
+    infection_rate<-0
+  }
+  total_infection_rate<-sum(infection_rate)
+  total_recovery_rate<-gamma*length(infected)
+  total_rate<-total_infection_rate+total_recovery_rate
+  time<-rexp(1,total_rate)
+  jj<-1
+  while(time<time_max && total_rate>0){
+    #cat(jj,"\n")
+    # if(jj==10) 
+    # browser()
+    r<-runif(1,0,total_rate)
+    if(r<total_recovery_rate){
+      if(length(infected)>1){u<-sample(infected,1)}else{u<-infected}
+      I<-I-1
+      R<-R+1
+      infected<-infected[infected!=u] # Sale u de los infectados.
+      # Actualizo G quitando todas las conexiones a u. Ésto con el fin de hacer más eficiente las busquedas:
+      Gu<-which(G==u,arr=TRUE)[,1]
+      if(length(Gu)>0)G<-G[-Gu,]
+      # Se tiene que identificar cuáles vecinos infecciosos son vecinos de u y decrementar su tasa de infección.
+      if(!is.null(at_risk$EenRiesgo)){
+        # if(jj==8) browser()
+        b<-which(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$inf)]==u)
+        if(length(b)>0){
+          rates_to_modify_nodes<-at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)][b]
+          dec<-(at_risk_nodes%in%rates_to_modify_nodes)*-tau
+          infection_rate<-infection_rate+dec
+        }
+      }
+    }else{
+      # if(S<=0 | any(infection_rate<0)) browser()
+      if(length(at_risk_nodes)>1){u<-sample(at_risk_nodes,1,prob=infection_rate)}else{u<-at_risk_nodes}#prob automaticamente estandariza los pesos
+      S<-S-1 # u se remueve de los susceptibles
+      infected<-sort(c(infected,u))  # u se añade a los infectados
+      I<-I+1
+      at_risk<-vecinos(G,infected)
+      if(!is.null(at_risk$EenRiesgo)){
+        table_at_risk<-table(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)])
+        at_risk_nodes<-as.numeric(names(table_at_risk)) # aparecen una sola vez en este vector
+        infection_rate<-tau*as.vector(table_at_risk)
+      }else{
+        infection_rate<-0
+      }
+    }  
+    total_infection_rate<-sum(infection_rate)
+    total_recovery_rate<-gamma*length(infected)
+    total_rate<-total_infection_rate+total_recovery_rate
+    time_hist[jj]<-time
+    S_hist[jj]<-S
+    I_hist[jj]<-I
+    R_hist[jj]<-R
+    jj<-1+jj
+    if(total_rate>0) time<-rexp(1,total_rate)+time
+  }
+  list(t=time_hist[1:(jj-1)],S=S_hist[1:(jj-1)],I=I_hist[1:(jj-1)],R=R_hist[1:(jj-1)])
+}
+
+# Ejemplos
+
+# Creo matriz que ordeno
+t_1 <- proc.time()
+G<-matrix(sample(1:1500,3000,rep=TRUE),1500,2)
+G<-ordenar(G)$Gord
+res<-Gillespie_SIR_Red(G,3000,0.24,14.75,seq(1:1500),5)
+matplot(res$t, t="l", xlab="Tiempo",xlim=c(0,5), ylab="Individuos", main="Gillespie para SIR", col=c("turquoise","coral","purple"), cbind(res$S,res$I,res$R), lwd=1)  
+res$S+res$I+res$R
+proc.time() - t_1
+
+names<-c("S", "I", "R")
+legend("right", inset=0.01, legend=names, col=c("turquoise","coral","purple"), bg= ("white"), horiz=F,lwd=1)
+
+#legend("topright", inset=0.01, legend=names, col=c(1:5),pch=16, box.col = par("fg"),text.width =  3, text.col = par("col"),text.font =0.8,bg= ("white"), horiz=F)
+
+library(igraph)
+t_2 <- proc.time() 
+ni<- sample_smallworld(dim=1,size=100, nei=1, p=0.1)
+plot(ni, vertex.size=6, vertex.label=NA, layout=layout_in_circle)
+get.edge.ids(ni, c(1,2,3,4), directed = FALSE, error = FALSE, multi = FALSE) 
+G_WS<-ordenar(get.edges(ni,E(ni)))$Gord
+set.seed(123)
+res2<-Gillespie_SIR_Red(G_WS,100,.5,.3,c(3,5,30),100)
+matplot(res2$t, t="l", xlab="Tiempo", ylab="Compartimentos S,I,R", main=expression(paste("Gillespie para SIR con, ", n, "=100, ", tau, "=0.5, " , gamma, "=0.3, ", infectados_inciales, "=3,5,30, ", tiempo, "=100. ")), cbind(res2$S,res2$I,res2$R),lwd=3)
+res2$S+res2$I+res2$R
+res2
+proc.time() - t_2
+
+names<-c("Susceptibles", "Infectados", "Recuperados")
+legend("topright", inset=0.01, legend=names, col=c(1:5),pch=16, bg= ("white"),   horiz=F)
+
+vecinos_susceptibles<-function(G,infected,exposed=NULL){
+  # identifica los vecinos susceptibles conectados a los infecciosos
+  a<-matrix(G%in%c(infected,exposed),ncol=2)
+  expuestos<-rowSums(a)
+  if(any(expuestos==2)) G<-G[expuestos!=2,] # remuevo ya que ambos han sido expuestos
+  a<-matrix(G%in%infected,ncol=2)
+  w<-which(a,arr=TRUE)
+  wv<-w
+  wv[w[,2]==1,2]<-2
+  wv[w[,2]==2,2]<-1
+  EenRiesgo<-G[w[,1],]
+  if(length(EenRiesgo)>0){
+    if(!is.matrix(EenRiesgo) && length(EenRiesgo)==2)
+      EenRiesgo<-t(EenRiesgo)
+  }else{
+    EenRiesgo<-NULL
+  }
+  list(EenRiesgo=EenRiesgo, suc=wv[,2],inf=w[,2])
+} 
+
+
+Gillespie_SEIR_Red<-function(G,n,tau, delta, gamma,exposed0=NULL,infected0,time_max){
+  # G es un grafo descrito por sus arcos. Éstos se consideran con vértices enumerados del 1 al n.
+  # n es el orden del grafo.
+  # delta es el parametro sobre el periodo de exposición.
+  mm<-time_max*(tau*gamma*delta*n)
+  time_hist<-S_hist<-E_hist<-I_hist<-R_hist<-rep(NA,mm)
+  time_hist[1]<-0
+  S_hist[1]<-S<-n-length(infected0)-length(exposed0)
+  E_hist[1]<-E<-length(exposed0)
+  I_hist[1]<-I<-length(infected0)
+  R_hist[1]<-R<-0
+  exposed<-exposed0
+  infected<-infected0
+  at_risk<-vecinos_susceptibles(G,infected,exposed)
+  
+  if(!is.null(at_risk$EenRiesgo)){
+    table_at_risk<-table(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)])
+    at_risk_nodes<-as.numeric(names(table_at_risk)) # aparecen una sola vez en este vector
+    infection_rate<-tau*as.vector(table_at_risk)
+  }else{
+    infection_rate<-0
+    at_risk_nodes<-NULL
+  }
+  total_infection_rate<-sum(infection_rate)
+  total_EI_rate<-delta*length(exposed)
+  total_recovery_rate<-gamma*length(infected)
+  total_rate<- total_infection_rate+total_EI_rate+total_recovery_rate
+  time<-rexp(1,total_rate)
+  jj<-1
+  
+  while(time<time_max && total_rate>0){
+    cat(jj,"\n")
+    # if(jj==21) browser()
+
+    r<-runif(1,0,total_rate)
+    
+    if(r<total_recovery_rate){ # I->R
+      if(length(infected)>1){u<-sample(infected,1)}else{u<-infected}
+      I<-I-1
+      R<-R+1
+      infected<-infected[infected!=u] # sale u de los infectados
+      # actualizo G quitando todas las conexiones a u. Ésto con el fin de hacer más eficiente las busquedas:
+      Gu<-which(G==u,arr=TRUE)[,1]
+      if(length(Gu)>0)G<-G[-Gu,]
+      # se tiene que identificar de que vecinos susceptibles es vecino u y decrementar su tasa de infección
+      if(!is.null(at_risk$EenRiesgo)){
+        b<-which(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$inf)]==u)
+        if(length(b)>0){
+          rates_to_modify_nodes<-at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)][b]
+          dec<-(at_risk_nodes%in%rates_to_modify_nodes)*-tau
+          infection_rate<-infection_rate+dec
+        }
+      }
+    }else if(r<total_EI_rate+total_recovery_rate){ # E->I
+      if(length(exposed)>1){u<-sample(exposed,1)}else{u<-exposed}
+      E<-E-1
+      I<-I+1
+      exposed<-exposed[exposed!=u] # sale u de los expuestos
+      infected<-sort(c(infected,u)) # entra a los infecciosos
+      at_risk<-vecinos_susceptibles(G,infected,exposed)
+      if(!is.null(at_risk$EenRiesgo)){
+        table_at_risk<-table(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)])
+        at_risk_nodes<-as.numeric(names(table_at_risk)) # aparecen una sola vez en este vector
+        infection_rate<-tau*as.vector(table_at_risk)
+      }else{
+        infection_rate<-0
+      }
+    }else{ # S->E
+      # if(S<=0 | any(infection_rate<0)) browser()
+      if(length(at_risk_nodes)>1){u<-sample(at_risk_nodes,1,prob=infection_rate)}else{u<-at_risk_nodes}# prob automáticamente estandariza los pesos
+      S<-S-1 #u se remueve de los susceptibles
+      exposed<-sort(c(exposed,u))  # u se añade a los expuestos
+      E<-E+1
+      # acutalizar infection_rate
+      if(!is.null(at_risk$EenRiesgo)){
+        w<-which(at_risk$EenRiesgo==u,arr=TRUE)[1]
+        at_risk$EenRiesgo<-at_risk$EenRiesgo[-w,]
+        if(length(at_risk$EenRiesgo)==2 & is.vector(at_risk$EenRiesgo)) at_risk$EenRiesgo<-t(at_risk$EenRiesgo)
+        at_risk$suc<-at_risk$suc[-w]
+        at_risk$inf<-at_risk$inf[-w]
+        # if(jj==7) browser()
+        if(length(at_risk$EenRiesgo)>0){
+          table_at_risk<-table(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)])
+          at_risk_nodes<-as.numeric(names(table_at_risk)) # aparecen una sola vez en este vector
+          infection_rate<-tau*as.vector(table_at_risk)
+        }else{
+          table_at_risk<-NULL
+          at_risk_nodes<-NULL
+          infection_rate<-0
+        }
+      }
+    }
+    total_infection_rate<-sum(infection_rate)
+    total_EI_rate<-delta*length(exposed)
+    total_recovery_rate<-gamma*length(infected)
+    total_rate<-total_infection_rate+total_EI_rate+total_recovery_rate
+    cat("total_rate=",total_rate,"\n")
+    time_hist[jj]<-time
+    S_hist[jj]<-S
+    E_hist[jj]<-E
+    I_hist[jj]<-I
+    R_hist[jj]<-R
+    jj<-1+jj
+    if(total_rate>0) time<-rexp(1,total_rate)+time
+  }
+  list(t=time_hist[1:(jj-1)],S=S_hist[1:(jj-1)],E=E_hist[1:(jj-1)],I=I_hist[1:(jj-1)],R=R_hist[1:(jj-1)])
+}
+
+#Creo matriz que ordeno
+t_3 <- proc.time() 
+GG<-matrix(sample(1:50,100,rep=TRUE),50,2)
+G<-ordenar(GG)$Gord
+set.seed(123)
+res<-Gillespie_SEIR_Red(G,n=50,tau=0.5,delta=0.2,gamma=0.3,infected0=c(3,5,30),time_max=100)
+matplot(res$t, t="l",xlab="Tiempo",ylab="Compartimentos S,E,I,R",
+        main=expression(paste("Gillespie para SIR con ", n, "=100, ",
+        tau, "=0.5, ", delta, "=0.2, ", gamma, "=0.3, ", infectados_inciales, "=3,5,30, ",
+        tiempo, "=100. ")),cbind(res$S,res$E,res$I,res$R),lwd=3)
+res$S+res$E+res$I+res$R
+proc.time() - t_3
+
+names<-c("Susceptibles", "Infectados", "Recuperados")
+legend("topright", inset=0.01, legend=names, col=c(1:5),pch=16, bg= ("white"),   horiz=F)
+
+###Prueba tiempo
+
+#Creo matriz que ordeno
+t_3 <- proc.time() 
+GG<-matrix(sample(1:1500,30000,rep=TRUE),1500,2)
+G<-ordenar(GG)$Gord
+set.seed(123)
+res<-Gillespie_SEIR_Red(G,n=3000,tau=0.24,delta=0.002,gamma=0.1475,infected0=seq(1,1000,by=1),time_max=12)
+matplot(res$t, t="l",xlab="Tiempo",ylab="Compartimentos S,E,I,R",
+        main=expression(paste("Gillespie para SIR con ", n, "=3000, ",
+                              tau, "=0.24, ", delta, "=0.002, ", gamma, "=0.1475, ", infectados_inciales, "=1,3,5,30,45,110,98",
+                              tiempo, "=12. ")),cbind(res$S,res$E,res$I,res$R),lwd=3)
+names<-c("S", "E","I", "R")
+legend("right", inset=0.01, legend=names, col=c("black","red","green","blue"),pch=16, bg= ("white"),horiz=F)
+proc.time() - t_3
+res$S+res$E+res$I+res$R
