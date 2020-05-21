@@ -6,11 +6,11 @@ tableinv <- function(tab){
   y <- rep(as.numeric(names(tab)),tab)
   return(y)
 }
-
+# Esta función remueve los arcos a sí misma. Además en la primera columna aparece el vertice menor, y 
+# estan ordenados en forma ascendente, con respecto a la primera y luego la segunda columna.
+# G es una matriz de tamaño mx2.
 ordenar<-function(G){
-  # Esta función remueve los arcos a sí misma. Además en la primera columna aparece el vertice menor, y 
-  # estan ordenados en forma ascendente, con respecto a la primera y luego la segunda columna.
-  # G es una matriz de tamaño mx2.
+  
   Gord<-G
   b<-which(G[,2]<G[,1])
   Gord[b,1]<-G[b,2]
@@ -31,7 +31,6 @@ vecinos<-function(G,vertices){
   wv<-w
   wv[w[,2]==1,2]<-2
   wv[w[,2]==2,2]<-1
-  # browser()
   EenRiesgo<-G[w[,1],]
   if(length(EenRiesgo)>0){
     if(!is.matrix(EenRiesgo) && length(EenRiesgo)==2)
@@ -42,9 +41,10 @@ vecinos<-function(G,vertices){
   list(EenRiesgo=EenRiesgo, suc=wv[,2],inf=w[,2])
 }
 
+# G es un grafo descrito por sus arcos. Éstos se consideran con vértices enumerados del 1 al n.
+# n es el orden del grafo.
 Gillespie_SIR_Red<-function(G,n,tau, gamma,infected0,time_max){
-  # G es un grafo descrito por sus arcos. Éstos se consideran con vértices enumerados del 1 al n.
-  # n es el orden del grafo.
+  
   mm<-time_max*(tau*gamma*n)
   time_hist<-S_hist<-I_hist<-R_hist<-rep(NA,mm)
   time_hist[1]<-0
@@ -66,9 +66,6 @@ Gillespie_SIR_Red<-function(G,n,tau, gamma,infected0,time_max){
   time<-rexp(1,total_rate)
   jj<-1
   while(time<time_max && total_rate>0){
-    #cat(jj,"\n")
-    # if(jj==10) 
-    # browser()
     r<-runif(1,0,total_rate)
     if(r<total_recovery_rate){
       if(length(infected)>1){u<-sample(infected,1)}else{u<-infected}
@@ -80,7 +77,6 @@ Gillespie_SIR_Red<-function(G,n,tau, gamma,infected0,time_max){
       if(length(Gu)>0)G<-G[-Gu,]
       # Se tiene que identificar cuáles vecinos infecciosos son vecinos de u y decrementar su tasa de infección.
       if(!is.null(at_risk$EenRiesgo)){
-        # if(jj==8) browser()
         b<-which(at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$inf)]==u)
         if(length(b)>0){
           rates_to_modify_nodes<-at_risk$EenRiesgo[cbind(1:dim(at_risk$EenRiesgo)[1],at_risk$suc)][b]
@@ -89,7 +85,7 @@ Gillespie_SIR_Red<-function(G,n,tau, gamma,infected0,time_max){
         }
       }
     }else{
-      # if(S<=0 | any(infection_rate<0)) browser()
+      # if(S<=0 | any(infection_rate<0)) 
       if(length(at_risk_nodes)>1){u<-sample(at_risk_nodes,1,prob=infection_rate)}else{u<-at_risk_nodes}#prob automaticamente estandariza los pesos
       S<-S-1 # u se remueve de los susceptibles
       infected<-sort(c(infected,u))  # u se añade a los infectados
@@ -118,35 +114,31 @@ Gillespie_SIR_Red<-function(G,n,tau, gamma,infected0,time_max){
 
 # Ejemplos
 
-# Creo matriz que ordeno
-t_1 <- proc.time()
-G<-matrix(sample(1:1500,3000,rep=TRUE),1500,2)
+# Gillespie SIR
+t_1<-proc.time()
+G<-matrix(sample(seq(1,5000,by=1),10000,rep=TRUE),5000,2)
 G<-ordenar(G)$Gord
-res<-Gillespie_SIR_Red(G,3000,0.24,14.75,seq(1:1500),5)
-matplot(res$t, t="l", xlab="Tiempo",xlim=c(0,5), ylab="Individuos", main="Gillespie para SIR", col=c("turquoise","coral","purple"), cbind(res$S,res$I,res$R), lwd=1)  
+res<-Gillespie_SIR_Red(G,n=5000,tau=1.4,gamma=0.5,infected0=seq(1,500,by=1),time_max=10)
+matplot(res$t, t="l", xlab="Tiempo (días)",xlim=c(0,10), ylab="Individuos",ylim=c(0,5000), main="Gillespie para SIR", col=c("turquoise","coral","purple"), cbind(res$S,res$I,res$R),lty=1, lwd=2)  
 res$S+res$I+res$R
-proc.time() - t_1
+proc.time()-t_1
 
-names<-c("S", "I", "R")
-legend("right", inset=0.01, legend=names, col=c("turquoise","coral","purple"), bg= ("white"), horiz=F,lwd=1)
+legend("topright", inset=0.01, legend=c("S", "I", "R"), col=c("turquoise","coral","purple"), bg= ("white"), horiz=F,lwd=1,cex=0.5)
 
-#legend("topright", inset=0.01, legend=names, col=c(1:5),pch=16, box.col = par("fg"),text.width =  3, text.col = par("col"),text.font =0.8,bg= ("white"), horiz=F)
-
-library(igraph)
+library(igraph)#### SIR small world
 t_2 <- proc.time() 
-ni<- sample_smallworld(dim=1,size=100, nei=1, p=0.1)
+ni<- sample_smallworld(dim=1,size=4000, nei=1, p=0.5)
 plot(ni, vertex.size=6, vertex.label=NA, layout=layout_in_circle)
-get.edge.ids(ni, c(1,2,3,4), directed = FALSE, error = FALSE, multi = FALSE) 
+#get.edge.ids(ni, c(1,2,3,4), directed = FALSE, error = FALSE, multi = FALSE) 
 G_WS<-ordenar(get.edges(ni,E(ni)))$Gord
 set.seed(123)
-res2<-Gillespie_SIR_Red(G_WS,100,.5,.3,c(3,5,30),100)
-matplot(res2$t, t="l", xlab="Tiempo", ylab="Compartimentos S,I,R", main=expression(paste("Gillespie para SIR con, ", n, "=100, ", tau, "=0.5, " , gamma, "=0.3, ", infectados_inciales, "=3,5,30, ", tiempo, "=100. ")), cbind(res2$S,res2$I,res2$R),lwd=3)
+res2<-Gillespie_SIR_Red(G_WS,4000,tau=1.5,gamma=0.3,seq(1,1000,by=1),10)
+matplot(res2$t, t="l", xlab="Tiempo (días)",xlim=c(0,10), ylab="Individuos",ylim=c(0,4000), main="Gillespie para SIR en mundo pequeño",col=c("turquoise","coral","purple"), cbind(res2$S,res2$I,res2$R),lty=1,lwd=2)
 res2$S+res2$I+res2$R
 res2
 proc.time() - t_2
 
-names<-c("Susceptibles", "Infectados", "Recuperados")
-legend("topright", inset=0.01, legend=names, col=c(1:5),pch=16, bg= ("white"),   horiz=F)
+legend("topright", inset=0.01, legend=c("S", "I", "R"), col=c("turquoise","coral","purple"), bg= ("white"),horiz=F,lwd=2,cex=0.5)
 
 vecinos_susceptibles<-function(G,infected,exposed=NULL){
   # identifica los vecinos susceptibles conectados a los infecciosos
@@ -277,35 +269,27 @@ Gillespie_SEIR_Red<-function(G,n,tau, delta, gamma,exposed0=NULL,infected0,time_
   list(t=time_hist[1:(jj-1)],S=S_hist[1:(jj-1)],E=E_hist[1:(jj-1)],I=I_hist[1:(jj-1)],R=R_hist[1:(jj-1)])
 }
 
-#Creo matriz que ordeno
-t_3 <- proc.time() 
-GG<-matrix(sample(1:50,100,rep=TRUE),50,2)
+#Gillespie SEIR
+t_3<-proc.time() 
+GG<-matrix(sample(seq(1,5000,by=1),10000,rep=TRUE),5000,2)
 G<-ordenar(GG)$Gord
 set.seed(123)
-res<-Gillespie_SEIR_Red(G,n=50,tau=0.5,delta=0.2,gamma=0.3,infected0=c(3,5,30),time_max=100)
-matplot(res$t, t="l",xlab="Tiempo",ylab="Compartimentos S,E,I,R",
-        main=expression(paste("Gillespie para SIR con ", n, "=100, ",
-        tau, "=0.5, ", delta, "=0.2, ", gamma, "=0.3, ", infectados_inciales, "=3,5,30, ",
-        tiempo, "=100. ")),cbind(res$S,res$E,res$I,res$R),lwd=3)
+res<-Gillespie_SEIR_Red(G,n=5000,tau=5.24,delta=0.2,gamma=2.5,infected0=seq(1,1000,by=1),time_max=20)
+matplot(res$t, t="l",xlab="Tiempo (días)",xlim=c(0,20),ylab="Individuos",ylim=c(0,5000), main="Gillespie para SEIR", col=c("turquoise","limegreen","coral","purple"),cbind(res$S,res$E,res$I,res$R),lty=1,lwd=2,cex=0.5)
 res$S+res$E+res$I+res$R
-proc.time() - t_3
+proc.time()-t_3
 
-names<-c("Susceptibles", "Infectados", "Recuperados")
-legend("topright", inset=0.01, legend=names, col=c(1:5),pch=16, bg= ("white"),   horiz=F)
+legend("topright", inset=0.01, legend=c("S","E","I","R"), col=c("turquoise","limegreen","coral","purple"), bg= ("white"), lty=1,lwd=2, cex=0.5,horiz=F)
 
-###Prueba tiempo
-
-#Creo matriz que ordeno
-t_3 <- proc.time() 
-GG<-matrix(sample(1:1500,30000,rep=TRUE),1500,2)
-G<-ordenar(GG)$Gord
+# SEIR en small world
+ni<- sample_smallworld(dim=1,size=4000, nei=1, p=0.5)
+plot(ni, vertex.size=6, vertex.label=NA, layout=layout_in_circle)
+#get.edge.ids(ni, c(1,2,3,4), directed = FALSE, error = FALSE, multi = FALSE) 
+G_WS<-ordenar(get.edges(ni,E(ni)))$Gord
 set.seed(123)
-res<-Gillespie_SEIR_Red(G,n=3000,tau=0.24,delta=0.002,gamma=0.1475,infected0=seq(1,1000,by=1),time_max=12)
-matplot(res$t, t="l",xlab="Tiempo",ylab="Compartimentos S,E,I,R",
-        main=expression(paste("Gillespie para SIR con ", n, "=3000, ",
-                              tau, "=0.24, ", delta, "=0.002, ", gamma, "=0.1475, ", infectados_inciales, "=1,3,5,30,45,110,98",
-                              tiempo, "=12. ")),cbind(res$S,res$E,res$I,res$R),lwd=3)
-names<-c("S", "E","I", "R")
-legend("right", inset=0.01, legend=names, col=c("black","red","green","blue"),pch=16, bg= ("white"),horiz=F)
-proc.time() - t_3
+res<-Gillespie_SEIR_Red(G_WS,n=5000,tau=5.24,delta=0.2,gamma=2.5,infected0=seq(1,1000,by=1),time_max=20)
+matplot(res$t, t="l",xlab="Tiempo (días)",xlim=c(0,20),ylab="Individuos",ylim=c(0,5000), main="Gillespie para SEIR en mundo pequeño", col=c("turquoise","limegreen","coral","purple"),cbind(res$S,res$E,res$I,res$R),lty=1,lwd=2,cex=0.5)
 res$S+res$E+res$I+res$R
+proc.time()-t_4
+
+legend("topright", inset=0.01, legend=c("S","E","I","R"), col=c("turquoise","limegreen","coral","purple"), bg= ("white"), lty=1,lwd=2, cex=0.5,horiz=F)
