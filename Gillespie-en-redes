@@ -1,4 +1,5 @@
-By: Dra. Lilia Leticia Ramírez Ramírez (CIMAT).
+Por: Dra. Lilia Leticia Ramírez Ramírez (CIMAT).
+
 # Sea G descrita por una matriz de mX2 donde cada renglón señala el arco existente en la red.
 # Consideramos una red no dirigida, así que la existencia del arco (v1,v2) es equivalente a (v2,v1).
 rm(list=ls())
